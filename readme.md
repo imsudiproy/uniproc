@@ -15,7 +15,7 @@ Right now, we’re actively building the foundation — so things may be unstabl
 ## 🛠 Current Status
 
 - [x] Project scaffolding set up
-- [x] Initial build works locally
+- [ ] Initial build works locally
 - [ ] Core functionality implementation
 - [ ] Tests and documentation
 - [ ] First public release

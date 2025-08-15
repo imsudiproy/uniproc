@@ -11,7 +11,7 @@ use clap::{ArgGroup, Parser};
 ))]
 struct Cli {
     // PID of process to Monitor
-    #[arg(required_unless_present = "Name")]
+    #[arg(required_unless_present = "name")]
     pid : Option<u32>,
 
     //Process Name (alternate to PID)

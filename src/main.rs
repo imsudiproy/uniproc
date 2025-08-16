@@ -24,7 +24,7 @@ struct Cli {
 
     //export in cvs instead of live view
     #[arg(long)]
-    cvs:Option<String>,
+    csv:Option<String>,
 
     //export json instead of live view
     #[arg(long)]
@@ -48,12 +48,12 @@ fn main () {
 
  println!("Refresh interval: {}ms", cli.interval);
 
- if let Some(cvs) = cli.cvs {
-    println!("Exporting to CVS: {cvs}");
+ if let Some(csv) = cli.csv {
+    println!("Exporting to CVS: {csv}");
  }
 
  if let Some(json) = cli.json {
-    println!("Exporting to CVS: {json}");
+    println!("Exporting to json: {json}");
  }
 
  if let Some(duration) = cli.duration {

@@ -1,5 +1,5 @@
 use clap::{ArgGroup, Parser};
-
+mod datasources;
 
 #[derive(Parser, Debug)]
 #[command(name = "uniproc")]
@@ -41,6 +41,7 @@ fn main () {
 
  if let Some(pid) = cli.pid {
     println!("Monitoring PID: {pid}");
+    datasources::cpu_mem::print_system_info();
  }
  else if let Some(name) = cli.name {
     println!("Monitoring Name: {name}");

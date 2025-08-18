@@ -1,30 +1,38 @@
-use sysinfo::{Process, System};
-use procfs;
+use core::time;
+// use std::os::unix::thread;
+// use std::thread::sleep;
+use std::thread;
 
-pub fn slow_all_process () {
-    let me = procfs::process::Process::myself().unwrap();
-    let me_stat = me.stat().unwrap();
-    let tps = procfs::ticks_per_second();
+use sysinfo::{System, Pid};
 
-    println!("{: >5} {: <8} {: >8} {}", "PID", "TTY", "TIME", "CMD");
+pub fn slow_all_process (pid: u32, interval: u64, duration: Option<u64>) {
+    let mut system = System::new_all();
+    let start_time = std::time::Instant::now();
+    let duration = duration.unwrap_or(u64::MAX);
 
-    let tty = format!("pty/{}", me_stat.tty_nr().1);
-    for prc in procfs::process::all_processes().unwrap() {
-        let prc = prc.unwrap();
-        let stat = prc.stat().unwrap();
-        if stat.tty_nr == me_stat.tty_nr {
-            // total_time is in seconds
-            let total_time =
-                (stat.utime + stat.stime) as f32 / (tps as f32);
-            println!(
-                "{: >5} {: <8} {: >8} {}",
-                stat.pid, tty, total_time, stat.comm
-            );
+    loop {
+        //refresh system information
+        system.refresh_all();
+        if let Some(process) = system.process(Pid::from(pid as usize)){
+            let cpu_usage = process.cpu_usage();
+            let memory = process.memory();
+            println!("Monitoring PID: {}", pid);
+            println!("CPU usage: {:.2}%, Memory: {} KB", cpu_usage, memory);
+        } else {
+            println!("The process PID {} not found", pid);
+            break;
         }
+
+        if start_time.elapsed().as_secs() >= duration {
+            break;
+        }
+
+        thread::sleep(time::Duration::from_millis(interval));
+
     }
 }
 
-pub fn monitor_pid(pid : u32){
+// pub fn monitor_pid(pid : u32){
     
 //     let mut sys = System::new_all();
 //     sys.refresh_all();
@@ -44,6 +52,6 @@ pub fn monitor_pid(pid : u32){
 
 // // Number of CPUs:
 // println!("NB CPUs: {}", sys.cpus().len());
-}
+// }
 
 

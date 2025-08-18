@@ -1,5 +1,5 @@
 use clap::{ArgGroup, Parser};
-
+mod datasources;
 
 #[derive(Parser, Debug)]
 #[command(name = "uniproc")]
@@ -24,7 +24,7 @@ struct Cli {
 
     //export in cvs instead of live view
     #[arg(long)]
-    cvs:Option<String>,
+    csv:Option<String>,
 
     //export json instead of live view
     #[arg(long)]
@@ -37,10 +37,11 @@ struct Cli {
 }
 fn main () {
  let cli = Cli::parse();
- println!("{cli:#?}");
+ //println!("{cli:#?}");
 
  if let Some(pid) = cli.pid {
     println!("Monitoring PID: {pid}");
+    datasources::cpu_mem::show_all_process(pid, cli.interval, cli.duration);
  }
  else if let Some(name) = cli.name {
     println!("Monitoring Name: {name}");
@@ -48,12 +49,12 @@ fn main () {
 
  println!("Refresh interval: {}ms", cli.interval);
 
- if let Some(cvs) = cli.cvs {
-    println!("Exporting to CVS: {cvs}");
+ if let Some(csv) = cli.csv {
+    println!("Exporting to CVS: {csv}");
  }
 
  if let Some(json) = cli.json {
-    println!("Exporting to CVS: {json}");
+    println!("Exporting to json: {json}");
  }
 
  if let Some(duration) = cli.duration {

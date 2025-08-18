@@ -37,7 +37,7 @@ struct Cli {
 }
 fn main () {
  let cli = Cli::parse();
- println!("{cli:#?}");
+ //println!("{cli:#?}");
 
  if let Some(pid) = cli.pid {
     println!("Monitoring PID: {pid}");

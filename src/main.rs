@@ -41,7 +41,7 @@ fn main () {
 
  if let Some(pid) = cli.pid {
     println!("Monitoring PID: {pid}");
-    datasources::cpu_mem::slow_all_process(pid, cli.interval, cli.duration);
+    datasources::cpu_mem::show_all_process(pid, cli.interval, cli.duration);
  }
  else if let Some(name) = cli.name {
     println!("Monitoring Name: {name}");

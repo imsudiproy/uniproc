@@ -5,7 +5,7 @@ use std::thread;
 
 use sysinfo::{System, Pid};
 
-pub fn slow_all_process (pid: u32, interval: u64, duration: Option<u64>) {
+pub fn show_all_process (pid: u32, interval: u64, duration: Option<u64>) {
     let mut system = System::new_all();
     let start_time = std::time::Instant::now();
     let duration = duration.unwrap_or(u64::MAX);

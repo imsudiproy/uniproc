@@ -42,3 +42,30 @@ pub fn show_all_process (pid: u32, interval: u64, duration: Option<u64>) {
 
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process;
+
+    #[test]
+    fn test_get_process_info_current_pid() {
+        let pid = process::id();
+        let result = get_process_info(pid);
+        assert!(result.is_some(), "Expected process info for current PID");
+        
+        let (cpu, mem) = result.unwrap();
+        // Memory should be non-zero for a real process
+        assert!(mem > 0, "Memory usage should be greater than 0");
+        // CPU usage might be 0 if idle, so no strict check
+        println!("CPU: {}, MEM: {} KB", cpu, mem);
+    }
+
+    #[test]
+    fn test_get_process_info_invalid_pid() {
+        let invalid_pid = u32::MAX; // something that should not exist
+        let result = get_process_info(invalid_pid);
+        assert!(result.is_none(), "Expected None for invalid PID");
+    }
+}

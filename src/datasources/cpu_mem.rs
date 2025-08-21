@@ -1,3 +1,7 @@
+//todo: 
+//1. Display memory usage in mb
+//2. add TUI
+
 use core::time;
 use std::thread;
 

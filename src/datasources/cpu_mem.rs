@@ -1,14 +1,12 @@
-//todo: 
-//1. Display memory usage in mb
-//2. add TUI
-
+//This file calculates the CPU and Memory usage of a process
 use core::time;
 use std::thread;
-
 use sysinfo::{System, Pid};
 
 pub fn get_process_info(pid : u32) -> Option<(f32, u64)> {
     let mut system = System::new_all();
+    system.refresh_all();
+    thread::sleep(time::Duration::from_millis(100));
     system.refresh_all();
 
     if let Some(process) = system.process(Pid::from(pid as usize)) {
@@ -28,7 +26,7 @@ pub fn show_all_process (pid: u32, interval: u64, duration: Option<u64>) {
         //refresh system information
         if let Some((cpu, mem)) = get_process_info(pid){
             println!("Monitoring PID: {}", pid);
-            println!("CPU usage: {:.2}%, Memory: {} KB", cpu, mem);
+            println!("CPU usage: {:.2}%, Memory: {} MB", cpu, ((mem as f64)/1024.0));
         } else {
             println!("The process PID {} not found", pid);
             break;

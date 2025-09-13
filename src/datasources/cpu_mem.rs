@@ -1,6 +1,6 @@
 //This file calculates the CPU and Memory usage of a process
 use core::time;
-use std::thread;
+use std::{string, thread};
 use sysinfo::{System, Pid};
 
 pub fn get_process_info(pid : u32) -> Option<(f32, u64)> {
@@ -18,7 +18,17 @@ pub fn get_process_info(pid : u32) -> Option<(f32, u64)> {
     }
 }
 
-pub fn show_all_process (pid: u32, interval: u64, duration: Option<u64>) {
+//complete this implementaion
+fn find_process_by_name(System: &System, name: Option<String>) -> u32 {
+
+}
+
+//complete this implementation
+pub fn show_process_by_name (name: Option<String>, interval: u64, duration: Option<u64>) {
+    let pid = find_process_by_name(&System, name);
+}
+
+pub fn show_process_by_pid (pid: u32, interval: u64, duration: Option<u64>) {
     let start_time = std::time::Instant::now();
     let duration = duration.unwrap_or(u64::MAX);
 

@@ -6,8 +6,8 @@ use sysinfo::{System, Pid};
 pub fn get_process_info(pid : u32) -> Option<(f32, u64)> {
     let mut system = System::new_all();
     system.refresh_all();
-    thread::sleep(time::Duration::from_millis(100));
-    system.refresh_all();
+    //thread::sleep(time::Duration::from_millis(100));
+    //system.refresh_all();
 
     if let Some(process) = system.process(Pid::from(pid as usize)) {
         let cpu_usage = process.cpu_usage();
@@ -57,7 +57,7 @@ mod tests {
         // Memory should be non-zero for a real process
         assert!(mem > 0, "Memory usage should be greater than 0");
         // CPU usage might be 0 if idle, so no strict check
-        println!("CPU: {}, MEM: {} KB", cpu, mem);
+        println!("CPU: {}, MEM: {} MB", cpu, (mem as f64)/1024.0);
     }
 
     #[test]

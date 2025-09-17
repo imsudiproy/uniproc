@@ -46,7 +46,7 @@ fn main () {
  }
  else if let Some(name) = cli.name {
     println!("Monitoring Name: {name}");
-    datasources::cpu_mem::show_process_by_name(name: Option<String>,  cli.interval, cli.duration);
+    datasources::cpu_mem::show_process_by_name(Some(name),  cli.interval, cli.duration);
  }
 
  println!("Refresh interval: {}ms", cli.interval);

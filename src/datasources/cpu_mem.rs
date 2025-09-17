@@ -7,8 +7,6 @@ use sysinfo::{System, Pid};
 pub fn get_process_info(pid : u32) -> Option<(f32, u64)> {
     let mut system = System::new_all();
     system.refresh_all();
-    //thread::sleep(time::Duration::from_millis(100));
-    //system.refresh_all();
 
     if let Some(process) = system.process(Pid::from(pid as usize)) {
         let cpu_usage = process.cpu_usage();

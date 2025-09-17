@@ -17,7 +17,7 @@ pub fn get_process_info(pid : u32) -> Option<(f32, u64)> {
     }
 }
 
-//Currently working on this
+//This function finds all processes matching the given name and returns their PIDs
 fn find_process_by_name(name: Option<String>) -> Vec<Pid> {
     let mut matches = Vec::new();
     let mut system = System::new_all();
@@ -35,7 +35,7 @@ fn find_process_by_name(name: Option<String>) -> Vec<Pid> {
     matches
 }
 
-//currently working on this
+//This function lists all processes matching the given name and allows user to select one to monitor
 pub fn show_process_by_name (name : Option<String>, interval: u64, duration: Option<u64>) {
     let pids = find_process_by_name(name);
 

@@ -1,8 +1,7 @@
 //This file calculates the CPU and Memory usage of a process
 use std::io::{self, Write};
 use core::time;
-use std::{os::unix::process, thread, vec};
-use clap::parser;
+use std::thread;
 use sysinfo::{System, Pid};
 
 pub fn get_process_info(pid : u32) -> Option<(f32, u64)> {

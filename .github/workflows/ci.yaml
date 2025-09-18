@@ -14,10 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CARGO_TERM_COLOR: always
   RUST_VERSION: 1.87.0
-  RUST_BACKTRACE: 1
-  RUST_LOG: "trace,tattoy_wezterm_term=off"
 
 jobs:
   build-test:

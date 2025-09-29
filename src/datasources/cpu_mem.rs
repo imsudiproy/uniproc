@@ -110,7 +110,9 @@ mod tests {
     #[test]
     fn test_get_process_info_current_pid() {
         let pid = process::id();
-        let result = get_process_info(pid);
+        let mut system = System::new_all();
+        system.refresh_all();
+        let result = get_process_info(pid, &mut system);
         assert!(result.is_some(), "Expected process info for current PID");
 
         let (cpu, mem) = result.unwrap();
@@ -123,7 +125,9 @@ mod tests {
     #[test]
     fn test_get_process_info_invalid_pid() {
         let invalid_pid = u32::MAX; // something that should not exist
-        let result = get_process_info(invalid_pid);
+        let mut system = System::new_all();
+        system.refresh_all();
+        let result = get_process_info(invalid_pid, &mut system);
         assert!(result.is_none(), "Expected None for invalid PID");
     }
 }

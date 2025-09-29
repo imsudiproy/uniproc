@@ -4,8 +4,8 @@ use std::io::{self, Write};
 use std::thread;
 use sysinfo::{Pid, System};
 
-pub fn get_process_info(pid: u32) -> Option<(f32, u64)> {
-    let mut system = System::new_all();
+pub fn get_process_info(pid: u32, system: &mut System) -> Option<(f32, u64)> {
+    //let mut system = System::new_all();
     system.refresh_all();
 
     if let Some(process) = system.process(Pid::from(pid as usize)) {
@@ -77,10 +77,12 @@ pub fn show_process_by_name(name: Option<String>, interval: u64, duration: Optio
 pub fn show_process_by_pid(pid: u32, interval: u64, duration: Option<u64>) {
     let start_time = std::time::Instant::now();
     let duration = duration.unwrap_or(u64::MAX);
+    let mut system = System::new_all();
+    system.refresh_all();
 
     loop {
         //refresh system information
-        if let Some((cpu, mem)) = get_process_info(pid) {
+        if let Some((cpu, mem)) = get_process_info(pid, &mut system) {
             println!("Monitoring PID: {}", pid);
             println!(
                 "CPU usage: {:.2}%, Memory: {} MB",

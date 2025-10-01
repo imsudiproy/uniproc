@@ -7,7 +7,7 @@ use sysinfo::{Pid, System};
 pub fn get_process_info(pid: u32, system: &mut System) -> Option<(f32, u64)> {
     system.refresh_all();
 
-    if let Some(process) = system.process(Pid::from(pid as usize)) {
+    if let Some(process) = system.process(Pid::from_u32(pid)) {
         let cpu_usage = process.cpu_usage();
         let memory = process.memory();
         Some((cpu_usage, memory))
@@ -50,7 +50,7 @@ pub fn show_process_by_name(name: Option<String>, interval: u64, duration: Optio
     for (index, pid) in pids.iter().enumerate() {
         if let Some(proc) = system.process(*pid) {
             println!(
-                "[{}] PID: {} | Name: {:?} | CPU: {:.2}% | Memory: {} KB",
+                "[{}] PID: {} | Name: {:?} | CPU: {:.2}% | Memory: {} MB",
                 index,
                 pid,
                 proc.name(),

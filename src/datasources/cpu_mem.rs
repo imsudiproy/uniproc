@@ -2,16 +2,16 @@
 use core::time;
 use std::io::{self, Write};
 use std::thread;
-use sysinfo::{Pid, System};
+use sysinfo::{DiskUsage, Pid, System};
 
-pub fn get_process_info(pid: u32, system: &mut System) -> Option<(f32, u64)> {
-    //let mut system = System::new_all();
+pub fn get_process_info(pid: u32, system: &mut System) -> Option<(f32, u64, DiskUsage)> {
     system.refresh_all();
 
-    if let Some(process) = system.process(Pid::from(pid as usize)) {
+    if let Some(process) = system.process(Pid::from_u32(pid)) {
         let cpu_usage = process.cpu_usage();
         let memory = process.memory();
-        Some((cpu_usage, memory))
+        let disk_usage = process.disk_usage();
+        Some((cpu_usage, memory, disk_usage))
     } else {
         None
     }
@@ -51,7 +51,7 @@ pub fn show_process_by_name(name: Option<String>, interval: u64, duration: Optio
     for (index, pid) in pids.iter().enumerate() {
         if let Some(proc) = system.process(*pid) {
             println!(
-                "[{}] PID: {} | Name: {:?} | CPU: {:.2}% | Memory: {} KB",
+                "[{}] PID: {} | Name: {:?} | CPU: {:.2}% | Memory: {} MB",
                 index,
                 pid,
                 proc.name(),
@@ -82,12 +82,14 @@ pub fn show_process_by_pid(pid: u32, interval: u64, duration: Option<u64>) {
 
     loop {
         //refresh system information
-        if let Some((cpu, mem)) = get_process_info(pid, &mut system) {
+        if let Some((cpu, mem, disk)) = get_process_info(pid, &mut system) {
             println!("Monitoring PID: {}", pid);
             println!(
-                "CPU usage: {:.2}%, Memory: {} MB",
+                "CPU usage: {:.2}% | Memory: {:.2} MB | Disk read {} KB | Disk Written {} KB",
                 cpu,
-                ((mem as f64) / 1024.0)
+                ((mem as f64) / 1024.0),
+                (disk.read_bytes / 1024),
+                disk.written_bytes / 1024
             );
         } else {
             println!("The process PID {} not found", pid);
@@ -115,11 +117,17 @@ mod tests {
         let result = get_process_info(pid, &mut system);
         assert!(result.is_some(), "Expected process info for current PID");
 
-        let (cpu, mem) = result.unwrap();
+        let (cpu, mem, disk) = result.unwrap();
         // Memory should be non-zero for a real process
         assert!(mem > 0, "Memory usage should be greater than 0");
         // CPU usage might be 0 if idle, so no strict check
-        println!("CPU: {}, MEM: {} MB", cpu, (mem as f64) / 1024.0);
+        println!(
+            "CPU: {}, MEM: {} MB, Read Disk {} KB, Write Disk {} KB",
+            cpu,
+            (mem as f64) / 1024.0,
+            disk.read_bytes / 1024,
+            disk.written_bytes / 1024
+        );
     }
 
     #[test]

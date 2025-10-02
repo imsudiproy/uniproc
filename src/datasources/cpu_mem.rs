@@ -2,7 +2,8 @@
 use core::time;
 use std::io::{self, Write};
 use std::thread;
-use sysinfo::{Pid, System};
+use std::time::Instant;
+use sysinfo::{Pid, System, Disk};
 
 pub fn get_process_info(pid: u32, system: &mut System) -> Option<(f32, u64)> {
     system.refresh_all();
@@ -79,6 +80,10 @@ pub fn show_process_by_pid(pid: u32, interval: u64, duration: Option<u64>) {
     let mut system = System::new_all();
     system.refresh_all();
 
+    let mut prev_read : u64 = 0;
+    let mut prev_written: u64 = 0;
+    let mut prev_time = Instant::now();
+
     loop {
         //refresh system information
         if let Some((cpu, mem)) = get_process_info(pid, &mut system) {
@@ -92,7 +97,7 @@ pub fn show_process_by_pid(pid: u32, interval: u64, duration: Option<u64>) {
             println!("The process PID {} not found", pid);
             break;
         }
-        
+
         if start_time.elapsed().as_secs() >= duration {
             break;
         }

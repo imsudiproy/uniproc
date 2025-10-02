@@ -122,7 +122,7 @@ mod tests {
         assert!(mem > 0, "Memory usage should be greater than 0");
         // CPU usage might be 0 if idle, so no strict check
         println!(
-            "CPU: {}, MEM: {} MB, Read Disk {} KB, Write Disk {} kb",
+            "CPU: {}, MEM: {} MB, Read Disk {} KB, Write Disk {} KB",
             cpu,
             (mem as f64) / 1024.0,
             disk.read_bytes / 1024,

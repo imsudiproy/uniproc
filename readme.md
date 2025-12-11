@@ -20,6 +20,8 @@ Right now, we’re actively building the foundation — so things may be unstabl
 - [ ] Tests and documentation
 - [ ] First public release
 
+>⚠️ Windows support isn’t fully tested yet; it’s still experimental.
+If it starts failing in CI, we’ll disable Windows runs immediately.
 ---
 
 ## Getting Started

@@ -49,7 +49,7 @@ jobs:
             # - name: windows-arm64
             #   runs-on: windows-2022-arm    # example — likely self-hosted / not available by default
             #   arch: arm64
-    name: Build and Test - ${{ matrix.name}} - ${{matrix.arch}}
+    name: Build and Test - ${{ matrix.name}}
     runs-on: ${{ matrix.runs-on }}
 
     steps:

@@ -46,10 +46,10 @@ jobs:
               arch: x64
   
             # Windows arm64: only if you manage a self-hosted runner or know it's available.
-            - name: windows-arm64
-              runs-on: windows-2022-arm    # example — likely self-hosted / not available by default
-              arch: arm64
-    name: Build and Test 🔬 - ${{ matrix.os }} - ${{matrix.arch}}
+            # - name: windows-arm64
+            #   runs-on: windows-2022-arm    # example — likely self-hosted / not available by default
+            #   arch: arm64
+    name: Build and Test 🔬 - ${{ matrix.runs-on}} - ${{matrix.arch}}
     runs-on: ${{ matrix.runs-on }}
 
     steps:

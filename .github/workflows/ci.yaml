@@ -27,7 +27,7 @@ jobs:
   
             # Linux arm64 - use GitHub hosted ARM runner (native) when available
             - name: ubuntu-arm64
-              runs-on: ubuntu-latest-arm
+              runs-on: ubuntu-24.04-arm
               arch: arm64
   
             # macOS x64 (if you still need Intel macOS, check availability)

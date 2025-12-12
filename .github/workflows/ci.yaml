@@ -18,36 +18,37 @@ jobs:
   build-test:
     strategy:
       fail-fast: false
-      include:
-          # Linux x64 (default)
-          - name: ubuntu-x64
-            runs-on: ubuntu-22.04
-            arch: x64
-
-          # Linux arm64 - use GitHub hosted ARM runner (native) when available
-          - name: ubuntu-arm64
-            runs-on: ubuntu-22.04-arm
-            arch: arm64
-
-          # macOS x64 (if you still need Intel macOS, check availability)
-          - name: macos-x64
-            runs-on: macos-14
-            arch: x64
-
-          # macOS arm64 (Apple Silicon)
-          - name: macos-arm64
-            runs-on: macos-14
-            arch: arm64
-
-          # Windows x64
-          - name: windows-x64
-            runs-on: windows-latest
-            arch: x64
-
-          # Windows arm64: only if you manage a self-hosted runner or know it's available.
-          - name: windows-arm64
-            runs-on: windows-2022-arm    # example — likely self-hosted / not available by default
-            arch: arm64
+      matrix:
+        include:
+            # Linux x64 (default)
+            - name: ubuntu-x64
+              runs-on: ubuntu-22.04
+              arch: x64
+  
+            # Linux arm64 - use GitHub hosted ARM runner (native) when available
+            - name: ubuntu-arm64
+              runs-on: ubuntu-22.04-arm
+              arch: arm64
+  
+            # macOS x64 (if you still need Intel macOS, check availability)
+            - name: macos-x64
+              runs-on: macos-14
+              arch: x64
+  
+            # macOS arm64 (Apple Silicon)
+            - name: macos-arm64
+              runs-on: macos-14
+              arch: arm64
+  
+            # Windows x64
+            - name: windows-x64
+              runs-on: windows-latest
+              arch: x64
+  
+            # Windows arm64: only if you manage a self-hosted runner or know it's available.
+            - name: windows-arm64
+              runs-on: windows-2022-arm    # example — likely self-hosted / not available by default
+              arch: arm64
     name: Build and Test 🔬 - ${{ matrix.os }} - ${{matrix.arch}}
     runs-on: ${{ matrix.runs-on }}
 

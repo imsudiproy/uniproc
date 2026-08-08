@@ -1,65 +1,80 @@
 use clap::{ArgGroup, Parser};
-mod datasources;
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::time::Duration;
+use uniproc::{
+    core::monitor::{Monitor, Target, resolve_target},
+    output,
+};
 
 #[derive(Parser, Debug)]
-#[command(name = "uniproc")]
-#[command(about = "Monitors process by PID or name", long_about = None)]
-#[command(group(
-    ArgGroup::new("target")
-    .required(true)
-    .args(&["pid", "name"])
-))]
+#[command(
+    name = "uniproc",
+    version,
+    about = "An interactive process resource monitor"
+)]
+#[command(group(ArgGroup::new("target").required(true).args(["pid", "name"])))]
 struct Cli {
-    // PID of process to Monitor
-    #[arg(required_unless_present = "name")]
+    /// Process ID to monitor.
+    #[arg(long, group = "target")]
     pid: Option<u32>,
-
-    //Process Name (alternate to PID)
-    #[arg(long)]
+    /// Exact process name to monitor. Fails safely if multiple processes match.
+    #[arg(long, group = "target")]
     name: Option<String>,
-
-    //Refresh intervals in miliseconds (default 1000ms)
-    #[arg(long, default_value_t = 1000)]
+    /// Sampling interval in milliseconds.
+    #[arg(long, default_value_t = 1000, value_parser = clap::value_parser!(u64).range(1..))]
     interval: u64,
-
-    //export in cvs instead of live view
-    #[arg(long)]
-    csv: Option<String>,
-
-    //export json instead of live view
-    #[arg(long)]
-    json: Option<String>,
-
-    //duration to run in second
-    #[arg(long)]
+    /// Stop after this many seconds. Required when exporting data.
+    #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
     duration: Option<u64>,
+    /// Write captured samples as CSV instead of starting the dashboard.
+    #[arg(long, value_name = "PATH")]
+    csv: Option<PathBuf>,
+    /// Write captured samples as formatted JSON instead of starting the dashboard.
+    #[arg(long, value_name = "PATH")]
+    json: Option<PathBuf>,
 }
 
-fn main() {
-    let cli = Cli::parse();
-    //println!("{cli:#?}");
-
-    if let Some(pid) = cli.pid {
-        println!("Monitoring PID: {pid}");
-        datasources::cpu_mem::show_process_by_pid(pid, cli.interval, cli.duration);
-    } else if let Some(name) = cli.name {
-        println!("Monitoring Name: {name}");
-        datasources::cpu_mem::show_process_by_name(Some(name), cli.interval, cli.duration);
+fn main() -> ExitCode {
+    match run(Cli::parse()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("uniproc: {error}");
+            ExitCode::FAILURE
+        }
     }
+}
 
-    println!("Refresh interval: {}ms", cli.interval);
-
-    if let Some(csv) = cli.csv {
-        println!("Exporting to CVS: {csv}");
-        todo!()
+fn run(cli: Cli) -> Result<(), String> {
+    let target = match (cli.pid, cli.name) {
+        (Some(pid), _) => Target::Pid(pid),
+        (_, Some(name)) => Target::Name(name),
+        _ => unreachable!("clap validates the target"),
+    };
+    let pid = resolve_target(&target)?;
+    let exporting = cli.csv.is_some() || cli.json.is_some();
+    if exporting && cli.duration.is_none() {
+        return Err(
+            "--duration is required with --csv or --json so collection has a defined end".into(),
+        );
     }
-
-    if let Some(json) = cli.json {
-        println!("Exporting to json: {json}");
-        todo!()
+    let monitor = Monitor::new(
+        pid,
+        Duration::from_millis(cli.interval),
+        cli.duration.map(Duration::from_secs),
+    )?;
+    let samples = if exporting {
+        monitor.collect()?
+    } else {
+        output::tui::run(monitor)?
+    };
+    if let Some(path) = cli.csv {
+        output::csv::write(&path, &samples)?;
+        println!("Wrote {} samples to {}", samples.len(), path.display());
     }
-
-    if let Some(duration) = cli.duration {
-        println!("Monitoring for {duration} seconds");
+    if let Some(path) = cli.json {
+        output::json::write(&path, &samples)?;
+        println!("Wrote {} samples to {}", samples.len(), path.display());
     }
+    Ok(())
 }

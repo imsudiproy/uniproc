@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - master
   workflow_dispatch:
 
 # Required to create the version tag and GitHub release with the built assets.

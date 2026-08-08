@@ -1,36 +1,30 @@
-# 🚧 UniProc — Under Construction 🚧
+# UniProc
 
-> **Status:** Work in Progress  
-> Expect breaking changes, missing features, and occasional dragons 🐉
+UniProc is a terminal-first process monitor built with Rust and Ratatui. It monitors one process safely by PID or exact name, with a responsive dashboard and script-friendly exports.
 
----
+## Features
 
-## 📌 About
+- Live CPU, resident memory, disk I/O, and history charts
+- System-wide network traffic shown alongside the selected process (per-process network I/O is not portable)
+- Pause, clear-history, and quit controls
+- Exact process-name lookup that refuses ambiguous matches
+- Bounded in-memory history and reliable terminal cleanup
+- CSV and pretty JSON export with byte-accurate fields
 
-**UniProc** Monitors process by PID or name.  
-Right now, we’re actively building the foundation — so things may be unstable, incomplete, or change without notice.
-
----
-
-## 🛠 Current Status
-
-- [x] Project scaffolding set up
-- [x] Initial build works locally
-- [ ] Core functionality implementation
-- [ ] Tests and documentation
-- [ ] First public release
-
->⚠️ Windows support isn’t fully tested yet; it’s still experimental.
-If it starts failing in CI, we’ll disable Windows runs immediately.
----
-
-## Getting Started
-
-> ⚠️ This project is not production-ready yet.
-
-Clone and build locally:
+## Use
 
 ```bash
-git clone https://github.com/imsudiproy/uniproc.git
-cd uniproc
-cargo build
+cargo run -- --pid 1234
+cargo run -- --name my-service --interval 500
+cargo run -- --pid 1234 --duration 60 --csv metrics.csv
+cargo run -- --pid 1234 --duration 60 --json metrics.json
+```
+
+Use `p` or `Space` to pause the dashboard, `c` to clear its history, and `q` or `Esc` to quit. Export modes require `--duration` so they always finish predictably.
+
+## Development
+
+```bash
+cargo test
+cargo fmt --check
+```

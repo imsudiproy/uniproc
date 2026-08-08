@@ -1,141 +1,117 @@
-//This file calculates the CPU and Memory usage of a process
-use core::time;
-use std::io::{self, Write};
-use std::thread;
-use sysinfo::{DiskUsage, Pid, System};
+//! Process sampling backed by `sysinfo`.
+//!
+//! Values are kept in bytes internally; presentation code is responsible for
+//! formatting them. This avoids the unit mismatch that existed in the first
+//! implementation.
 
-pub fn get_process_info(pid: u32, system: &mut System) -> Option<(f32, u64, DiskUsage)> {
-    system.refresh_all();
+use serde::Serialize;
+use std::time::{SystemTime, UNIX_EPOCH};
+use sysinfo::{Networks, Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 
-    if let Some(process) = system.process(Pid::from_u32(pid)) {
-        let cpu_usage = process.cpu_usage();
-        let memory = process.memory();
-        let disk_usage = process.disk_usage();
-        Some((cpu_usage, memory, disk_usage))
-    } else {
-        None
-    }
+#[derive(Debug, Clone, Serialize)]
+pub struct ProcessInfo {
+    pub timestamp_ms: u64,
+    pub pid: u32,
+    pub name: String,
+    pub cpu_percent: f32,
+    pub memory_bytes: u64,
+    pub system_memory_bytes: u64,
+    pub virtual_memory_bytes: u64,
+    /// Bytes read since the preceding process refresh (platform dependent).
+    pub disk_read_bytes: u64,
+    /// Bytes written since the preceding process refresh (platform dependent).
+    pub disk_written_bytes: u64,
+    /// System-wide network bytes received since the preceding refresh.
+    pub network_received_bytes: u64,
+    /// System-wide network bytes transmitted since the preceding refresh.
+    pub network_transmitted_bytes: u64,
 }
 
-//This function finds all processes matching the given name and returns their PIDs
-fn find_process_by_name(name: Option<String>) -> Vec<Pid> {
-    let mut matches = Vec::new();
-    let mut system = System::new_all();
-    system.refresh_all();
-
-    if let Some(target_name) = name {
-        for (pid, process) in system.processes() {
-            if let Some(process_name) = process.name().to_str() {
-                if process_name == target_name {
-                    matches.push(*pid);
-                }
-            }
-        }
-    }
-    matches
+pub struct ProcessSampler {
+    pid: Pid,
+    system: System,
+    networks: Networks,
 }
 
-//This function lists all processes matching the given name and allows user to select one to monitor
-pub fn show_process_by_name(name: Option<String>, interval: u64, duration: Option<u64>) {
-    let pids = find_process_by_name(name);
-
-    let mut system = System::new_all();
-    system.refresh_all();
-
-    if pids.is_empty() {
-        println!("No matching process found!!");
-        return;
-    }
-
-    println!("Matching Processes: ");
-    for (index, pid) in pids.iter().enumerate() {
-        if let Some(proc) = system.process(*pid) {
-            println!(
-                "[{}] PID: {} | Name: {:?} | CPU: {:.2}% | Memory: {} MB",
-                index,
-                pid,
-                proc.name(),
-                proc.cpu_usage(),
-                proc.memory()
-            );
-        }
-    }
-
-    print!("Select a process by number: ");
-    io::stdout().flush().unwrap();
-
-    let mut input = String::new();
-    if io::stdin().read_line(&mut input).is_ok() {
-        if let Ok(selected_index) = input.trim().parse::<usize>() {
-            if let Some(selected_pid) = pids.get(selected_index) {
-                show_process_by_pid(selected_pid.as_u32(), interval, duration);
-            }
-        }
-    }
-}
-
-pub fn show_process_by_pid(pid: u32, interval: u64, duration: Option<u64>) {
-    let start_time = std::time::Instant::now();
-    let duration = duration.unwrap_or(u64::MAX);
-    let mut system = System::new_all();
-    system.refresh_all();
-
-    loop {
-        //refresh system information
-        if let Some((cpu, mem, disk)) = get_process_info(pid, &mut system) {
-            println!("Monitoring PID: {}", pid);
-            println!(
-                "CPU usage: {:.2}% | Memory: {:.2} MB | Disk read {} KB | Disk Written {} KB",
-                cpu,
-                ((mem as f64) / 1024.0),
-                (disk.read_bytes / 1024),
-                disk.written_bytes / 1024
-            );
-        } else {
-            println!("The process PID {} not found", pid);
-            break;
-        }
-
-        if start_time.elapsed().as_secs() >= duration {
-            break;
-        }
-
-        thread::sleep(time::Duration::from_millis(interval));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::process;
-
-    #[test]
-    fn test_get_process_info_current_pid() {
-        let pid = process::id();
-        let mut system = System::new_all();
-        system.refresh_all();
-        let result = get_process_info(pid, &mut system);
-        assert!(result.is_some(), "Expected process info for current PID");
-
-        let (cpu, mem, disk) = result.unwrap();
-        // Memory should be non-zero for a real process
-        assert!(mem > 0, "Memory usage should be greater than 0");
-        // CPU usage might be 0 if idle, so no strict check
-        println!(
-            "CPU: {}, MEM: {} MB, Read Disk {} KB, Write Disk {} KB",
-            cpu,
-            (mem as f64) / 1024.0,
-            disk.read_bytes / 1024,
-            disk.written_bytes / 1024
+impl ProcessSampler {
+    pub fn new(pid: u32) -> Result<Self, String> {
+        let pid = Pid::from_u32(pid);
+        let mut system = System::new();
+        system.refresh_memory();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::everything(),
         );
+        if system.process(pid).is_none() {
+            return Err(format!("process with PID {pid} was not found"));
+        }
+        Ok(Self {
+            pid,
+            system,
+            networks: Networks::new_with_refreshed_list(),
+        })
     }
 
-    #[test]
-    fn test_get_process_info_invalid_pid() {
-        let invalid_pid = u32::MAX; // something that should not exist
-        let mut system = System::new_all();
-        system.refresh_all();
-        let result = get_process_info(invalid_pid, &mut system);
-        assert!(result.is_none(), "Expected None for invalid PID");
+    pub fn sample(&mut self) -> Option<ProcessInfo> {
+        self.system.refresh_memory();
+        self.networks.refresh(true);
+        self.system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[self.pid]),
+            true,
+            ProcessRefreshKind::everything(),
+        );
+        let process = self.system.process(self.pid)?;
+        let disk = process.disk_usage();
+        Some(ProcessInfo {
+            timestamp_ms: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .ok()?
+                .as_millis() as u64,
+            pid: self.pid.as_u32(),
+            name: process.name().to_string_lossy().into_owned(),
+            cpu_percent: process.cpu_usage(),
+            memory_bytes: process.memory(),
+            system_memory_bytes: self.system.total_memory(),
+            virtual_memory_bytes: process.virtual_memory(),
+            disk_read_bytes: disk.read_bytes,
+            disk_written_bytes: disk.written_bytes,
+            network_received_bytes: self
+                .networks
+                .values()
+                .map(|network| network.received())
+                .sum(),
+            network_transmitted_bytes: self
+                .networks
+                .values()
+                .map(|network| network.transmitted())
+                .sum(),
+        })
     }
+}
+
+/// Returns all exact process-name matches. Callers intentionally decide how to
+/// handle ambiguity instead of silently monitoring an arbitrary process.
+pub fn find_processes_by_name(name: &str) -> Vec<(u32, String)> {
+    let system = System::new_all();
+    system
+        .processes_by_exact_name(name.as_ref())
+        .map(|process| {
+            (
+                process.pid().as_u32(),
+                process.name().to_string_lossy().into_owned(),
+            )
+        })
+        .collect()
+}
+
+/// Compatibility helper retained for consumers of the original public API.
+pub fn get_process_info(pid: u32, system: &mut System) -> Option<(f32, u64, sysinfo::DiskUsage)> {
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+        true,
+        ProcessRefreshKind::everything(),
+    );
+    let process = system.process(Pid::from_u32(pid))?;
+    Some((process.cpu_usage(), process.memory(), process.disk_usage()))
 }

@@ -10,16 +10,27 @@ use crossterm::{
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span},
-    widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, GraphType, Paragraph, Sparkline},
+    widgets::{
+        Axis, Block, BorderType, Borders, Chart, Dataset, Gauge, GraphType, Paragraph, Sparkline,
+    },
 };
 use std::io::{self, Stdout};
 use std::time::{Duration, Instant};
 
 const HISTORY_LIMIT: usize = 180;
+const SURFACE: Color = Color::Rgb(10, 14, 20);
+const PANEL: Color = Color::Rgb(16, 23, 34);
+const BORDER: Color = Color::Rgb(53, 65, 83);
+const TEXT: Color = Color::Rgb(222, 229, 237);
+const MUTED: Color = Color::Rgb(132, 145, 164);
+const CPU: Color = Color::Rgb(73, 190, 255);
+const MEMORY: Color = Color::Rgb(198, 132, 255);
+const DISK: Color = Color::Rgb(86, 211, 137);
+const NETWORK: Color = Color::Rgb(255, 191, 87);
 
 pub fn run(monitor: Monitor) -> Result<Vec<ProcessInfo>, String> {
     enable_raw_mode().map_err(|e| format!("cannot enable terminal raw mode: {e}"))?;
@@ -130,43 +141,29 @@ fn draw(
     status: &str,
 ) {
     let latest = samples.last();
-    let title = latest
-        .map(|s| format!(" {}  ·  PID {} ", s.name, s.pid))
-        .unwrap_or_else(|| " UniProc · waiting for first sample ".into());
-    let header = Paragraph::new(Line::from(vec![
-        Span::styled(
-            title,
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("   "),
-        Span::styled(
-            status,
-            Style::default()
-                .fg(if paused { Color::Yellow } else { Color::Green })
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]))
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("UNIPROC MONITOR"),
-    );
+    frame.render_widget(Block::default().style(Style::default().bg(SURFACE)), area);
+
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
             Constraint::Length(5),
+            Constraint::Length(7),
             Constraint::Min(10),
-            Constraint::Length(3),
+            Constraint::Length(4),
         ])
+        .margin(1)
         .split(area);
-    frame.render_widget(header, rows[0]);
+
+    render_header(frame, rows[0], latest, samples.len(), paused, status);
 
     let cards = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .constraints([
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+        ])
         .split(rows[1]);
     let cpu = latest.map_or(0.0, |s| s.cpu_percent);
     let memory = latest.map_or(0, |s| s.memory_bytes);
@@ -175,28 +172,51 @@ fn draw(
         .map_or(0.0, |sample| {
             sample.memory_bytes as f32 / sample.system_memory_bytes as f32
         });
-    frame.render_widget(
-        metric_gauge(
-            "CPU",
-            cpu.min(100.0) / 100.0,
-            format!("{cpu:.1}%"),
-            Color::Cyan,
-        ),
+    let disk_read = latest.map_or(0, |s| s.disk_read_bytes);
+    let disk_written = latest.map_or(0, |s| s.disk_written_bytes);
+    let network_received = latest.map_or(0, |s| s.network_received_bytes);
+    let network_transmitted = latest.map_or(0, |s| s.network_transmitted_bytes);
+
+    render_metric_card(
+        frame,
         cards[0],
+        "CPU",
+        format!("{cpu:.1}%"),
+        "processor load",
+        cpu.min(100.0) / 100.0,
+        CPU,
     );
-    frame.render_widget(
-        metric_gauge(
-            "RESIDENT MEMORY",
-            memory_ratio,
-            format_bytes(memory),
-            Color::Magenta,
-        ),
+    render_metric_card(
+        frame,
         cards[1],
+        "Memory",
+        format_bytes(memory),
+        "resident set",
+        memory_ratio,
+        MEMORY,
+    );
+    render_metric_card(
+        frame,
+        cards[2],
+        "Disk I/O",
+        format!("↓ {}", format_bytes(disk_read)),
+        format!("↑ {}", format_bytes(disk_written)),
+        0.0,
+        DISK,
+    );
+    render_metric_card(
+        frame,
+        cards[3],
+        "Network",
+        format!("↓ {}", format_bytes(network_received)),
+        format!("↑ {}", format_bytes(network_transmitted)),
+        0.0,
+        NETWORK,
     );
 
     let charts = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+        .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
         .split(rows[2]);
     render_cpu_chart(frame, charts[0], samples);
     let spark: Vec<u64> = samples
@@ -206,42 +226,136 @@ fn draw(
     frame.render_widget(
         Sparkline::default()
             .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("MEMORY HISTORY (MiB)"),
+                panel_block("Memory History")
+                    .title_bottom(Line::from(" MiB ").style(Style::default().fg(MUTED))),
             )
             .data(&spark)
-            .style(Style::default().fg(Color::Magenta)),
+            .style(Style::default().fg(MEMORY).bg(PANEL)),
         charts[1],
     );
 
-    let footer = latest
-        .map(|s| {
-            format!(
-                "Disk: ↓ {} ↑ {}   ·   System network: ↓ {} ↑ {}",
-                format_bytes(s.disk_read_bytes),
-                format_bytes(s.disk_written_bytes),
-                format_bytes(s.network_received_bytes),
-                format_bytes(s.network_transmitted_bytes),
-            )
-        })
-        .unwrap_or_else(|| "Collecting process metrics…".into());
+    let footer = "p / space pause   ·   c clear history   ·   q / esc quit";
     frame.render_widget(
-        Paragraph::new(footer).alignment(Alignment::Center).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" p / space pause · c clear · q / esc quit "),
-        ),
+        Paragraph::new(footer)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(MUTED).bg(PANEL))
+            .block(panel_block("Controls")),
         rows[3],
     );
 }
 
-fn metric_gauge(title: &str, ratio: f32, label: String, color: Color) -> Gauge<'_> {
-    Gauge::default()
-        .block(Block::default().borders(Borders::ALL).title(title))
-        .gauge_style(Style::default().fg(color).add_modifier(Modifier::BOLD))
-        .ratio(ratio.clamp(0.0, 1.0) as f64)
-        .label(label)
+fn render_header(
+    frame: &mut ratatui::Frame,
+    area: Rect,
+    latest: Option<&ProcessInfo>,
+    sample_count: usize,
+    paused: bool,
+    status: &str,
+) {
+    let target = latest
+        .map(|s| format!("{}  ·  PID {}", s.name, s.pid))
+        .unwrap_or_else(|| "waiting for first sample".into());
+    let status_color = if paused { NETWORK } else { DISK };
+    let lines = vec![
+        Line::from(vec![
+            Span::styled(
+                "UniProc",
+                Style::default()
+                    .fg(TEXT)
+                    .bg(PANEL)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  process monitor", Style::default().fg(MUTED).bg(PANEL)),
+        ]),
+        Line::from(vec![
+            Span::styled(target, Style::default().fg(CPU).bg(PANEL)),
+            Span::styled(
+                format!("   ·   {sample_count} samples   ·   "),
+                Style::default().fg(MUTED).bg(PANEL),
+            ),
+            Span::styled(
+                format!(" {status} "),
+                Style::default()
+                    .fg(status_color)
+                    .bg(PANEL)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+    ];
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(panel_block("Dashboard"))
+            .style(Style::default().bg(PANEL)),
+        area,
+    );
+}
+
+fn render_metric_card(
+    frame: &mut ratatui::Frame,
+    area: Rect,
+    title: &'static str,
+    value: String,
+    subtitle: impl Into<String>,
+    ratio: f32,
+    color: Color,
+) {
+    let block = panel_block(title);
+    let inner = block.inner(area).inner(Margin {
+        vertical: 0,
+        horizontal: 1,
+    });
+    frame.render_widget(block, area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+
+    frame.render_widget(
+        Paragraph::new(Line::from(value))
+            .style(
+                Style::default()
+                    .fg(TEXT)
+                    .bg(PANEL)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .alignment(Alignment::Left),
+        rows[0],
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(subtitle.into())).style(Style::default().fg(MUTED).bg(PANEL)),
+        rows[1],
+    );
+    if ratio > 0.0 {
+        frame.render_widget(
+            Gauge::default()
+                .gauge_style(Style::default().fg(color).bg(Color::Rgb(31, 41, 55)))
+                .ratio(ratio.clamp(0.0, 1.0) as f64)
+                .label(""),
+            rows[2],
+        );
+    } else {
+        frame.render_widget(
+            Sparkline::default()
+                .data(&[1])
+                .max(1)
+                .style(Style::default().fg(color).bg(PANEL)),
+            rows[2],
+        );
+    }
+}
+
+fn panel_block(title: &'static str) -> Block<'static> {
+    Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(BORDER))
+        .title(Line::from(format!(" {title} ")).style(Style::default().fg(MUTED).bg(PANEL)))
+        .style(Style::default().fg(TEXT).bg(PANEL))
 }
 
 fn render_cpu_chart(frame: &mut ratatui::Frame, area: Rect, samples: &[ProcessInfo]) {
@@ -260,19 +374,25 @@ fn render_cpu_chart(frame: &mut ratatui::Frame, area: Rect, samples: &[ProcessIn
         .name("CPU %")
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
-        .style(Style::default().fg(Color::Cyan))
+        .style(Style::default().fg(CPU))
         .data(&data);
     let chart = Chart::new(vec![dataset])
-        .block(Block::default().borders(Borders::ALL).title("CPU HISTORY"))
+        .block(panel_block("CPU History"))
+        .style(Style::default().bg(PANEL))
         .x_axis(
             Axis::default()
                 .bounds([0.0, x_upper])
-                .labels([Line::from("now")]),
+                .style(Style::default().fg(MUTED).bg(PANEL))
+                .labels([Line::from("now").style(Style::default().fg(MUTED))]),
         )
         .y_axis(
             Axis::default()
                 .bounds([0.0, upper])
-                .labels([Line::from("0%"), Line::from(format!("{upper:.0}%"))]),
+                .style(Style::default().fg(MUTED).bg(PANEL))
+                .labels([
+                    Line::from("0%").style(Style::default().fg(MUTED)),
+                    Line::from(format!("{upper:.0}%")).style(Style::default().fg(MUTED)),
+                ]),
         );
     frame.render_widget(chart, area);
 }

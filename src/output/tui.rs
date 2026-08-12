@@ -183,7 +183,7 @@ fn draw(
         "CPU",
         format!("{cpu:.1}%"),
         "processor load",
-        cpu.min(100.0) / 100.0,
+        Some(cpu.min(100.0) / 100.0),
         CPU,
     );
     render_metric_card(
@@ -192,7 +192,7 @@ fn draw(
         "Memory",
         format_bytes(memory),
         "resident set",
-        memory_ratio,
+        Some(memory_ratio),
         MEMORY,
     );
     render_metric_card(
@@ -201,7 +201,7 @@ fn draw(
         "Disk I/O",
         format!("↓ {}", format_bytes(disk_read)),
         format!("↑ {}", format_bytes(disk_written)),
-        0.0,
+        None,
         DISK,
     );
     render_metric_card(
@@ -210,7 +210,7 @@ fn draw(
         "Network",
         format!("↓ {}", format_bytes(network_received)),
         format!("↑ {}", format_bytes(network_transmitted)),
-        0.0,
+        None,
         NETWORK,
     );
 
@@ -296,7 +296,7 @@ fn render_metric_card(
     title: &'static str,
     value: String,
     subtitle: impl Into<String>,
-    ratio: f32,
+    gauge_ratio: Option<f32>,
     color: Color,
 ) {
     let block = panel_block(title);
@@ -330,7 +330,7 @@ fn render_metric_card(
         Paragraph::new(Line::from(subtitle.into())).style(Style::default().fg(MUTED).bg(PANEL)),
         rows[1],
     );
-    if ratio > 0.0 {
+    if let Some(ratio) = gauge_ratio {
         frame.render_widget(
             Gauge::default()
                 .gauge_style(Style::default().fg(color).bg(Color::Rgb(31, 41, 55)))

@@ -255,13 +255,17 @@ fn render_header(
     let target = latest
         .map(|s| {
             format!(
-                "{}  ·  PID {}  ·  uptime {}",
+                "{}  ·  PID {}  ·  uptime {}  ·  threads {}",
                 s.name,
                 s.pid,
-                format_duration(s.uptime_seconds)
+                format_duration(s.uptime_seconds),
+                format_thread_count(s.thread_count)
             )
         })
         .unwrap_or_else(|| "waiting for first sample".into());
+    let executable_path = latest
+        .and_then(|s| s.executable_path.as_deref())
+        .unwrap_or("executable path unavailable");
     let status_color = if paused { NETWORK } else { DISK };
     let lines = vec![
         Line::from(vec![
@@ -288,6 +292,10 @@ fn render_header(
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
+        Line::from(Span::styled(
+            executable_path.to_owned(),
+            Style::default().fg(MUTED).bg(PANEL),
+        )),
     ];
     frame.render_widget(
         Paragraph::new(lines)
@@ -434,4 +442,10 @@ pub fn format_duration(seconds: u64) -> String {
     } else {
         format!("{seconds}s")
     }
+}
+
+fn format_thread_count(thread_count: Option<usize>) -> String {
+    thread_count
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "n/a".to_owned())
 }

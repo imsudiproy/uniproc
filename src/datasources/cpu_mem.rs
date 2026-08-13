@@ -13,6 +13,10 @@ pub struct ProcessInfo {
     pub timestamp_ms: u64,
     pub pid: u32,
     pub name: String,
+    /// Executable path for the process, when reported by the operating system.
+    pub executable_path: Option<String>,
+    /// Number of process tasks/threads, when reported by the operating system.
+    pub thread_count: Option<usize>,
     /// Seconds the process has been running.
     pub uptime_seconds: u64,
     pub cpu_percent: f32,
@@ -72,6 +76,10 @@ impl ProcessSampler {
                 .as_millis() as u64,
             pid: self.pid.as_u32(),
             name: process.name().to_string_lossy().into_owned(),
+            executable_path: process
+                .exe()
+                .map(|path| path.to_string_lossy().into_owned()),
+            thread_count: process.tasks().map(|tasks| tasks.len()),
             uptime_seconds: process.run_time(),
             cpu_percent: process.cpu_usage(),
             memory_bytes: process.memory(),

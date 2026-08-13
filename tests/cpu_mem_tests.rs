@@ -14,6 +14,12 @@ fn test_sampler_collects_current_process() {
         .expect("system clock is after unix epoch")
         .as_secs();
     assert_eq!(sample.pid, process::id());
+    if let Some(executable_path) = &sample.executable_path {
+        assert!(!executable_path.is_empty());
+    }
+    if let Some(thread_count) = sample.thread_count {
+        assert!(thread_count > 0);
+    }
     assert!(sample.uptime_seconds <= now_seconds);
     assert!(sample.memory_bytes > 0);
     assert!(sample.system_memory_bytes >= sample.memory_bytes);

@@ -140,6 +140,7 @@ UniProc currently collects these fields for each sample:
 | `timestamp_ms` | milliseconds | Unix timestamp in milliseconds. |
 | `pid` | process ID | Target process ID. |
 | `name` | string | Process name reported by the operating system. |
+| `uptime_seconds` | seconds | How long the target process has been running. |
 | `cpu_percent` | percent | CPU usage reported by `sysinfo`. |
 | `memory_bytes` | bytes | Resident memory for the process. |
 | `system_memory_bytes` | bytes | Total system memory at sample time. |
@@ -156,7 +157,7 @@ The dashboard formats byte values for readability. Export files keep raw byte va
 CSV export writes a header row followed by one row per sample:
 
 ```text
-timestamp_ms,pid,name,cpu_percent,memory_bytes,system_memory_bytes,virtual_memory_bytes,disk_read_bytes,disk_written_bytes,system_network_received_bytes,system_network_transmitted_bytes
+timestamp_ms,pid,name,uptime_seconds,cpu_percent,memory_bytes,system_memory_bytes,virtual_memory_bytes,disk_read_bytes,disk_written_bytes,system_network_received_bytes,system_network_transmitted_bytes
 ```
 
 Example:
@@ -183,6 +184,7 @@ Example shape:
     "timestamp_ms": 1760000000000,
     "pid": 1234,
     "name": "my-service",
+    "uptime_seconds": 3600,
     "cpu_percent": 12.5,
     "memory_bytes": 104857600,
     "system_memory_bytes": 17179869184,

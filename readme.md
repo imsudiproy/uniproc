@@ -8,7 +8,7 @@ Use UniProc when you want a lightweight, focused view of one process instead of 
 
 ## Features
 
-- Interactive Ratatui dashboard with CPU, resident memory, disk I/O, network, and history views
+- Interactive Ratatui dashboard with CPU, resident memory, disk I/O, network, uptime, executable path, thread count, and history views
 - Safe target selection by PID or exact process name
 - Ambiguous process-name protection, with a prompt to select a PID when multiple processes match
 - Pause, clear-history, and quit controls in the dashboard
@@ -32,7 +32,7 @@ Current support notes:
 - Linux: expected to work
 - Windows: not tested yet, but it should ideally work because the underlying libraries support Windows
 
-Some metric values are platform dependent. In particular, disk I/O comes from process refresh data exposed by `sysinfo`, and network traffic is reported system-wide because portable per-process network I/O is not available through the current implementation.
+Some metric values are platform dependent. In particular, disk I/O comes from process refresh data exposed by `sysinfo`, executable paths can be unavailable when the operating system cannot report them, thread counts are currently reported only where `sysinfo` exposes process tasks, and network traffic is reported system-wide because portable per-process network I/O is not available through the current implementation.
 
 ## Requirements
 
@@ -123,6 +123,8 @@ Export modes require `--duration` so the command has a defined end. Without `--c
 
 ## Dashboard Controls
 
+The dashboard header shows the target process name, PID, process uptime, thread count, and executable path when those details are available. Unsupported or unavailable thread counts are shown as `threads n/a`; unavailable executable paths are shown as `executable path unavailable`.
+
 | Key | Action |
 | --- | --- |
 | `p` | Pause or resume sampling. |
@@ -140,6 +142,8 @@ UniProc currently collects these fields for each sample:
 | `timestamp_ms` | milliseconds | Unix timestamp in milliseconds. |
 | `pid` | process ID | Target process ID. |
 | `name` | string | Process name reported by the operating system. |
+| `executable_path` | path or null | Executable path for the process, when reported by the operating system. |
+| `thread_count` | count or null | Number of process tasks/threads, when reported by the operating system. |
 | `uptime_seconds` | seconds | How long the target process has been running. |
 | `cpu_percent` | percent | CPU usage reported by `sysinfo`. |
 | `memory_bytes` | bytes | Resident memory for the process. |
@@ -150,14 +154,14 @@ UniProc currently collects these fields for each sample:
 | `network_received_bytes` | bytes | System-wide network bytes received since the preceding refresh. |
 | `network_transmitted_bytes` | bytes | System-wide network bytes transmitted since the preceding refresh. |
 
-The dashboard formats byte values for readability. Export files keep raw byte values.
+The dashboard formats byte and duration values for readability. Export files keep raw byte values and write uptime as raw seconds. Optional fields use `null` in JSON and an empty CSV cell when the operating system does not report them.
 
 ## CSV Output
 
 CSV export writes a header row followed by one row per sample:
 
 ```text
-timestamp_ms,pid,name,uptime_seconds,cpu_percent,memory_bytes,system_memory_bytes,virtual_memory_bytes,disk_read_bytes,disk_written_bytes,system_network_received_bytes,system_network_transmitted_bytes
+timestamp_ms,pid,name,executable_path,thread_count,uptime_seconds,cpu_percent,memory_bytes,system_memory_bytes,virtual_memory_bytes,disk_read_bytes,disk_written_bytes,system_network_received_bytes,system_network_transmitted_bytes
 ```
 
 Example:
@@ -184,6 +188,8 @@ Example shape:
     "timestamp_ms": 1760000000000,
     "pid": 1234,
     "name": "my-service",
+    "executable_path": "/usr/local/bin/my-service",
+    "thread_count": 8,
     "uptime_seconds": 3600,
     "cpu_percent": 12.5,
     "memory_bytes": 104857600,
@@ -205,6 +211,8 @@ Example shape:
 - Dashboard history is bounded to avoid unbounded memory growth.
 - Export collection sleeps for the configured interval between samples.
 - Disk I/O values are platform dependent.
+- Executable paths may be unavailable because of operating-system permissions or platform limitations.
+- Thread counts come from process task data and may be unavailable on platforms where `sysinfo` does not expose tasks.
 - Network values are system-wide deltas, not per-process network usage.
 - Export paths are overwritten if the target file already exists.
 

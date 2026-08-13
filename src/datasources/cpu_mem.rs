@@ -13,6 +13,8 @@ pub struct ProcessInfo {
     pub timestamp_ms: u64,
     pub pid: u32,
     pub name: String,
+    /// Seconds the process has been running.
+    pub uptime_seconds: u64,
     pub cpu_percent: f32,
     pub memory_bytes: u64,
     pub system_memory_bytes: u64,
@@ -70,6 +72,7 @@ impl ProcessSampler {
                 .as_millis() as u64,
             pid: self.pid.as_u32(),
             name: process.name().to_string_lossy().into_owned(),
+            uptime_seconds: process.run_time(),
             cpu_percent: process.cpu_usage(),
             memory_bytes: process.memory(),
             system_memory_bytes: self.system.total_memory(),

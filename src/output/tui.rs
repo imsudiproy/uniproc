@@ -253,7 +253,14 @@ fn render_header(
     status: &str,
 ) {
     let target = latest
-        .map(|s| format!("{}  ·  PID {}", s.name, s.pid))
+        .map(|s| {
+            format!(
+                "{}  ·  PID {}  ·  uptime {}",
+                s.name,
+                s.pid,
+                format_duration(s.uptime_seconds)
+            )
+        })
         .unwrap_or_else(|| "waiting for first sample".into());
     let status_color = if paused { NETWORK } else { DISK };
     let lines = vec![
@@ -409,5 +416,22 @@ pub fn format_bytes(bytes: u64) -> String {
         format!("{bytes} B")
     } else {
         format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+pub fn format_duration(seconds: u64) -> String {
+    let days = seconds / 86_400;
+    let hours = (seconds % 86_400) / 3_600;
+    let minutes = (seconds % 3_600) / 60;
+    let seconds = seconds % 60;
+
+    if days > 0 {
+        format!("{days}d {hours}h")
+    } else if hours > 0 {
+        format!("{hours}h {minutes}m")
+    } else if minutes > 0 {
+        format!("{minutes}m {seconds}s")
+    } else {
+        format!("{seconds}s")
     }
 }

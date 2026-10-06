@@ -1,3 +1,9 @@
+//! Main entry point for the `uniproc` application.
+//!
+//! Handles command-line argument parsing, target process resolution, and
+//! routes execution to either the interactive TUI dashboard or the headless
+//! data collection exporters (CSV/JSON).
+
 use clap::{ArgGroup, Parser};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -7,6 +13,8 @@ use uniproc::{
     output,
 };
 
+/// Command-line arguments definition using `clap`.
+/// Provides structured configuration for target selection, sampling, and output methods.
 #[derive(Parser, Debug)]
 #[command(
     name = "uniproc",
@@ -35,6 +43,9 @@ struct Cli {
     json: Option<PathBuf>,
 }
 
+/// Program execution starts here.
+/// Evaluates the top-level application logic and gracefully converts `Result` types
+/// into standardized process exit codes.
 fn main() -> ExitCode {
     match run(Cli::parse()) {
         Ok(()) => ExitCode::SUCCESS,
@@ -45,29 +56,50 @@ fn main() -> ExitCode {
     }
 }
 
+/// Core execution flow.
+///
+/// 1. Resolves the requested target process.
+/// 2. Validates export constraints (e.g., duration must exist for file exports).
+/// 3. Instantiates the `Monitor` tracker.
+/// 4. Either runs the interactive TUI or headless data collection.
+/// 5. Optionally flushes collected samples to CSV or JSON formats.
+///
+/// # Arguments
+/// * `cli` - Parsed command-line arguments.
 fn run(cli: Cli) -> Result<(), String> {
+    // Construct target specifier from command line
     let target = match (cli.pid, cli.name) {
         (Some(pid), _) => Target::Pid(pid),
         (_, Some(name)) => Target::Name(name),
         _ => unreachable!("clap validates the target"),
     };
+    
+    // Attempt to locate the live PID corresponding to the target
     let pid = resolve_target(&target)?;
     let exporting = cli.csv.is_some() || cli.json.is_some();
+    
+    // When exporting without a TUI, a duration is mandatory so the collector knows when to stop.
     if exporting && cli.duration.is_none() {
         return Err(
             "--duration is required with --csv or --json so collection has a defined end".into(),
         );
     }
+    
+    // Initialize the main resource monitor
     let monitor = Monitor::new(
         pid,
         Duration::from_millis(cli.interval),
         cli.duration.map(Duration::from_secs),
     )?;
+    
+    // Run the monitor blockingly (either silently or visibly via TUI)
     let samples = if exporting {
         monitor.collect()?
     } else {
         output::tui::run(monitor)?
     };
+    
+    // Post-processing: write accumulated samples to disk if requested
     if let Some(path) = cli.csv {
         output::csv::write(&path, &samples)?;
         println!("Wrote {} samples to {}", samples.len(), path.display());

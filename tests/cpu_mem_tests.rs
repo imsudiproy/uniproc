@@ -7,7 +7,8 @@ use uniproc::datasources::cpu_mem;
 
 #[test]
 fn test_sampler_collects_current_process() {
-    let mut sampler = cpu_mem::ProcessSampler::new(process::id()).expect("current process exists");
+    let mut sampler =
+        cpu_mem::ProcessSampler::new(process::id(), false).expect("current process exists");
     let sample = sampler.sample().expect("current process can be sampled");
     let now_seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -21,7 +21,7 @@ pub fn write(path: impl AsRef<Path>, samples: &[ProcessInfo]) -> Result<(), Stri
     // Open destination file
     let file =
         File::create(path.as_ref()).map_err(|e| format!("cannot create JSON output: {e}"))?;
-        
+
     // Serialize the structs into pretty-printed JSON directly to the buffered writer
     serde_json::to_writer_pretty(BufWriter::new(file), samples)
         .map_err(|e| format!("cannot write JSON output: {e}"))

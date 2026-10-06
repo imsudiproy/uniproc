@@ -41,6 +41,9 @@ struct Cli {
     /// Write captured samples as formatted JSON instead of starting the dashboard.
     #[arg(long, value_name = "PATH")]
     json: Option<PathBuf>,
+    /// Track the entire process tree (aggregate metrics of all child processes).
+    #[arg(long, short = 't')]
+    tree: bool,
 }
 
 /// Program execution starts here.
@@ -73,32 +76,33 @@ fn run(cli: Cli) -> Result<(), String> {
         (_, Some(name)) => Target::Name(name),
         _ => unreachable!("clap validates the target"),
     };
-    
+
     // Attempt to locate the live PID corresponding to the target
     let pid = resolve_target(&target)?;
     let exporting = cli.csv.is_some() || cli.json.is_some();
-    
+
     // When exporting without a TUI, a duration is mandatory so the collector knows when to stop.
     if exporting && cli.duration.is_none() {
         return Err(
             "--duration is required with --csv or --json so collection has a defined end".into(),
         );
     }
-    
+
     // Initialize the main resource monitor
     let monitor = Monitor::new(
         pid,
         Duration::from_millis(cli.interval),
         cli.duration.map(Duration::from_secs),
+        cli.tree,
     )?;
-    
+
     // Run the monitor blockingly (either silently or visibly via TUI)
     let samples = if exporting {
         monitor.collect()?
     } else {
         output::tui::run(monitor)?
     };
-    
+
     // Post-processing: write accumulated samples to disk if requested
     if let Some(path) = cli.csv {
         output::csv::write(&path, &samples)?;

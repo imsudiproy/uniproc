@@ -199,7 +199,7 @@ fn draw(
     let network_received = latest.map_or(0, |s| s.network_received_bytes);
     let network_transmitted = latest.map_or(0, |s| s.network_transmitted_bytes);
 
-    let is_tree = latest.map_or(false, |s| s.name.ends_with("(tree)"));
+    let is_tree = latest.is_some_and(|s| s.name.ends_with("(tree)"));
     let memory_title = if is_tree { "Memory (Σ RSS)" } else { "Memory" };
     let memory_subtitle = if is_tree {
         "overcounts shared libs"

@@ -47,7 +47,7 @@ pub fn run(monitor: Monitor) -> Result<Vec<ProcessInfo>, String> {
         let _ = disable_raw_mode();
         return Err(format!("cannot enter alternate screen: {error}"));
     }
-    
+
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = match Terminal::new(backend) {
         Ok(terminal) => terminal,
@@ -58,9 +58,9 @@ pub fn run(monitor: Monitor) -> Result<Vec<ProcessInfo>, String> {
             return Err(format!("cannot initialize terminal: {error}"));
         }
     };
-    
+
     let result = run_dashboard(&mut terminal, monitor);
-    
+
     let cleanup = restore_terminal(&mut terminal);
     match (result, cleanup) {
         (_, Err(error)) => Err(error),
@@ -84,7 +84,7 @@ fn run_dashboard(
     let mut samples = Vec::new();
     let mut paused = false;
     let mut status = String::from("LIVE");
-    
+
     samples.push(monitor.sample().ok_or("the monitored process exited")?);
     let mut last_tick = Instant::now();
 
@@ -92,7 +92,7 @@ fn run_dashboard(
         terminal
             .draw(|frame| draw(frame.area(), frame, &samples, paused, &status))
             .map_err(|e| format!("cannot draw dashboard: {e}"))?;
-            
+
         if monitor.is_expired() {
             status = String::from("DURATION COMPLETE");
             terminal
@@ -106,7 +106,7 @@ fn run_dashboard(
             .interval()
             .saturating_sub(elapsed)
             .min(Duration::from_millis(100));
-            
+
         if event::poll(timeout).map_err(|e| format!("cannot read terminal events: {e}"))?
             && let Event::Key(key) = event::read().map_err(|e| e.to_string())?
             && key.kind == KeyEventKind::Press
@@ -154,7 +154,7 @@ fn draw(
     status: &str,
 ) {
     let latest = samples.last();
-    
+
     frame.render_widget(Block::default().style(Style::default().bg(SURFACE)), area);
 
     // Main vertical layout structure:
@@ -166,11 +166,11 @@ fn draw(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4),   // Header
-            Constraint::Length(6),   // Metric Cards
-            Constraint::Min(10),     // CPU Chart
-            Constraint::Length(7),   // Memory Sparkline
-            Constraint::Length(3),   // Footer
+            Constraint::Length(4), // Header
+            Constraint::Length(6), // Metric Cards
+            Constraint::Min(10),   // CPU Chart
+            Constraint::Length(7), // Memory Sparkline
+            Constraint::Length(3), // Footer
         ])
         .margin(1)
         .split(area);
@@ -186,7 +186,7 @@ fn draw(
             Constraint::Percentage(25),
         ])
         .split(rows[1]);
-        
+
     let cpu = latest.map_or(0.0, |s| s.cpu_percent);
     let memory = latest.map_or(0, |s| s.memory_bytes);
     let memory_ratio = latest
@@ -199,33 +199,75 @@ fn draw(
     let network_received = latest.map_or(0, |s| s.network_received_bytes);
     let network_transmitted = latest.map_or(0, |s| s.network_transmitted_bytes);
 
-    render_metric_card(frame, cards[0], "CPU", format!("{cpu:.1}%"), "load", Some(cpu.min(100.0) / 100.0), CPU);
-    render_metric_card(frame, cards[1], "Memory", format_bytes(memory), "resident set", Some(memory_ratio), MEMORY);
-    render_metric_card(frame, cards[2], "Disk I/O", format!("↓ {}", format_bytes(disk_read)), format!("↑ {}", format_bytes(disk_written)), None, DISK);
-    render_metric_card(frame, cards[3], "Network", format!("↓ {}", format_bytes(network_received)), format!("↑ {}", format_bytes(network_transmitted)), None, NETWORK);
+    let is_tree = latest.map_or(false, |s| s.name.ends_with("(tree)"));
+    let memory_title = if is_tree { "Memory (Σ RSS)" } else { "Memory" };
+    let memory_subtitle = if is_tree {
+        "overcounts shared libs"
+    } else {
+        "resident set"
+    };
+
+    render_metric_card(
+        frame,
+        cards[0],
+        "CPU",
+        format!("{cpu:.1}%"),
+        "load",
+        Some(cpu.min(100.0) / 100.0),
+        CPU,
+    );
+    render_metric_card(
+        frame,
+        cards[1],
+        memory_title,
+        format_bytes(memory),
+        memory_subtitle,
+        Some(memory_ratio),
+        MEMORY,
+    );
+    render_metric_card(
+        frame,
+        cards[2],
+        "Disk I/O",
+        format!("↓ {}", format_bytes(disk_read)),
+        format!("↑ {}", format_bytes(disk_written)),
+        None,
+        DISK,
+    );
+    render_metric_card(
+        frame,
+        cards[3],
+        "Network",
+        format!("↓ {}", format_bytes(network_received)),
+        format!("↑ {}", format_bytes(network_transmitted)),
+        None,
+        NETWORK,
+    );
 
     // Render CPU Chart (Line Graph)
     render_cpu_chart(frame, rows[2], samples);
-    
+
     // Render Memory Sparkline
     let spark: Vec<u64> = samples
         .iter()
         .map(|sample| sample.memory_bytes / (1024 * 1024))
         .collect();
-        
+
     let max_mem_mib = spark.iter().copied().max().unwrap_or(1);
-    
+
     // Scale the maximum upper bound of the sparkline to 150% of the peak memory usage.
-    // This provides vertical headroom so that the visual representation naturally aligns 
-    // at the 66% height mark during steady-state memory utilization, rather than filling 
+    // This provides vertical headroom so that the visual representation naturally aligns
+    // at the 66% height mark during steady-state memory utilization, rather than filling
     // the entire block height. A minimum scale of 10 MiB is enforced for tiny processes.
-    let spark_max = ((max_mem_mib as f64 * 1.5) as u64).max(10); 
-    
+    let spark_max = ((max_mem_mib as f64 * 1.5) as u64).max(10);
+
     frame.render_widget(
         Sparkline::default()
             .block(
-                panel_block("Memory Allocation (MiB)")
-                    .title_bottom(Line::from(format!(" Peak: {} MiB ", max_mem_mib)).style(Style::default().fg(MUTED))),
+                panel_block("Memory Allocation (MiB)").title_bottom(
+                    Line::from(format!(" Peak: {} MiB ", max_mem_mib))
+                        .style(Style::default().fg(MUTED)),
+                ),
             )
             .data(&spark)
             .max(spark_max)
@@ -261,27 +303,57 @@ fn render_header(
             )
         })
         .unwrap_or_else(|| "waiting for first sample".into());
-        
+
     let executable_path = latest
         .and_then(|s| s.executable_path.as_deref())
         .unwrap_or("executable path unavailable");
-        
+
     let status_color = if paused { NETWORK } else { DISK };
-    
+
     let lines = vec![
         Line::from(vec![
-            Span::styled(" UniProc ", Style::default().fg(TEXT).bg(CPU).add_modifier(Modifier::BOLD)),
-            Span::styled("  Process Telemetry", Style::default().fg(TEXT).bg(PANEL).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " UniProc ",
+                Style::default()
+                    .fg(TEXT)
+                    .bg(CPU)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "  Process Telemetry",
+                Style::default()
+                    .fg(TEXT)
+                    .bg(PANEL)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled(target, Style::default().fg(CPU).bg(PANEL)),
-            Span::styled(format!("   ·   {sample_count} samples   ·   "), Style::default().fg(MUTED).bg(PANEL)),
-            Span::styled(format!(" {status} "), Style::default().fg(status_color).bg(PANEL).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("   ·   {sample_count} samples   ·   "),
+                Style::default().fg(MUTED).bg(PANEL),
+            ),
+            Span::styled(
+                format!(" {status} "),
+                Style::default()
+                    .fg(status_color)
+                    .bg(PANEL)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
-        Line::from(Span::styled(executable_path.to_owned(), Style::default().fg(MUTED).bg(PANEL).add_modifier(Modifier::ITALIC))),
+        Line::from(Span::styled(
+            executable_path.to_owned(),
+            Style::default()
+                .fg(MUTED)
+                .bg(PANEL)
+                .add_modifier(Modifier::ITALIC),
+        )),
     ];
-    
-    frame.render_widget(Paragraph::new(lines).style(Style::default().bg(PANEL)), area);
+
+    frame.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(PANEL)),
+        area,
+    );
 }
 
 fn render_metric_card(
@@ -294,7 +366,10 @@ fn render_metric_card(
     color: Color,
 ) {
     let block = panel_block(title);
-    let inner = block.inner(area).inner(Margin { vertical: 0, horizontal: 1 });
+    let inner = block.inner(area).inner(Margin {
+        vertical: 0,
+        horizontal: 1,
+    });
     frame.render_widget(block, area);
 
     let rows = Layout::default()
@@ -307,11 +382,19 @@ fn render_metric_card(
         .split(inner);
 
     frame.render_widget(
-        Paragraph::new(Line::from(value)).style(Style::default().fg(TEXT).bg(PANEL).add_modifier(Modifier::BOLD)),
+        Paragraph::new(Line::from(value)).style(
+            Style::default()
+                .fg(TEXT)
+                .bg(PANEL)
+                .add_modifier(Modifier::BOLD),
+        ),
         rows[0],
     );
-    frame.render_widget(Paragraph::new(Line::from(subtitle.into())).style(Style::default().fg(MUTED).bg(PANEL)), rows[1]);
-    
+    frame.render_widget(
+        Paragraph::new(Line::from(subtitle.into())).style(Style::default().fg(MUTED).bg(PANEL)),
+        rows[1],
+    );
+
     if let Some(ratio) = gauge_ratio {
         frame.render_widget(
             Gauge::default()
@@ -323,7 +406,10 @@ fn render_metric_card(
         );
     } else {
         frame.render_widget(
-            Sparkline::default().data([1]).max(1).style(Style::default().fg(Color::Rgb(39, 39, 42)).bg(PANEL)),
+            Sparkline::default()
+                .data([1])
+                .max(1)
+                .style(Style::default().fg(Color::Rgb(39, 39, 42)).bg(PANEL)),
             rows[2],
         );
     }
@@ -334,7 +420,14 @@ fn panel_block(title: &'static str) -> Block<'static> {
         .borders(Borders::ALL)
         .border_type(BorderType::Thick)
         .border_style(Style::default().fg(BORDER))
-        .title(Line::from(format!(" {title} ")).style(Style::default().fg(TEXT).bg(PANEL).add_modifier(Modifier::BOLD)))
+        .title(
+            Line::from(format!(" {title} ")).style(
+                Style::default()
+                    .fg(TEXT)
+                    .bg(PANEL)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        )
         .style(Style::default().fg(TEXT).bg(PANEL))
 }
 
@@ -344,17 +437,21 @@ fn render_cpu_chart(frame: &mut ratatui::Frame, area: Rect, samples: &[ProcessIn
         .enumerate()
         .map(|(i, sample)| (i as f64, sample.cpu_percent as f64))
         .collect();
-        
-    let upper = data.iter().map(|(_, value)| *value).fold(100.0_f64, f64::max).ceil();
+
+    let upper = data
+        .iter()
+        .map(|(_, value)| *value)
+        .fold(100.0_f64, f64::max)
+        .ceil();
     let x_upper = data.len().max(2) as f64 - 1.0;
-    
+
     let dataset = Dataset::default()
         .name("CPU %")
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
         .style(Style::default().fg(CPU))
         .data(&data);
-        
+
     let chart = Chart::new(vec![dataset])
         .block(panel_block("CPU Usage History"))
         .style(Style::default().bg(PANEL))
@@ -373,7 +470,7 @@ fn render_cpu_chart(frame: &mut ratatui::Frame, area: Rect, samples: &[ProcessIn
                     Line::from(format!("{upper:.0}%")).style(Style::default().fg(MUTED)),
                 ]),
         );
-        
+
     frame.render_widget(chart, area);
 }
 
@@ -410,5 +507,7 @@ pub fn format_duration(seconds: u64) -> String {
 }
 
 fn format_thread_count(thread_count: Option<usize>) -> String {
-    thread_count.map(|count| count.to_string()).unwrap_or_else(|| "n/a".to_owned())
+    thread_count
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "n/a".to_owned())
 }

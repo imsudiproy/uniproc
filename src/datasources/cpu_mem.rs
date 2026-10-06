@@ -5,6 +5,7 @@
 //! unit mismatch issues and prevents precision loss during data processing.
 
 use serde::Serialize;
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sysinfo::{Networks, Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 
@@ -47,6 +48,8 @@ pub struct ProcessInfo {
 pub struct ProcessSampler {
     /// Target Process ID to monitor.
     pid: Pid,
+    /// Whether to aggregate metrics from descendant processes.
+    include_children: bool,
     /// The persistent `sysinfo` System instance.
     system: System,
     /// The persistent `sysinfo` Networks instance for tracking global I/O.
@@ -61,24 +64,30 @@ impl ProcessSampler {
     ///
     /// # Arguments
     /// * `pid` - The target Process ID.
-    pub fn new(pid: u32) -> Result<Self, String> {
+    /// * `include_children` - If true, aggregates metrics for the full process tree.
+    pub fn new(pid: u32, include_children: bool) -> Result<Self, String> {
         let pid = Pid::from_u32(pid);
         let mut system = System::new();
-        // Pre-fetch system memory totals
+
         system.refresh_memory();
-        // Warm up process specific metrics
-        system.refresh_processes_specifics(
-            ProcessesToUpdate::Some(&[pid]),
-            true,
-            ProcessRefreshKind::everything(),
-        );
-        
-        if system.process(pid).is_none() {
-            return Err(format!("process with PID {pid} was not found"));
+
+        if include_children {
+            system.refresh_processes(ProcessesToUpdate::All, true);
+        } else {
+            system.refresh_processes_specifics(
+                ProcessesToUpdate::Some(&[pid]),
+                true,
+                ProcessRefreshKind::everything(),
+            );
         }
-        
+
+        if system.process(pid).is_none() {
+            return Err(format!("process with PID {} was not found", pid.as_u32()));
+        }
+
         Ok(Self {
             pid,
+            include_children,
             system,
             networks: Networks::new_with_refreshed_list(),
         })
@@ -92,38 +101,91 @@ impl ProcessSampler {
     /// # Returns
     /// `Some(ProcessInfo)` if the process is still alive, otherwise `None`.
     pub fn sample(&mut self) -> Option<ProcessInfo> {
-        // Refresh memory first to get updated system totals
         self.system.refresh_memory();
-        // Refresh network counters (used for delta calculations)
         self.networks.refresh(true);
-        // Refresh the specific process to get updated CPU and I/O deltas
-        self.system.refresh_processes_specifics(
-            ProcessesToUpdate::Some(&[self.pid]),
-            true,
-            ProcessRefreshKind::everything(),
-        );
-        
+
+        if self.include_children {
+            // Must refresh all to discover new children and update existing ones
+            self.system.refresh_processes(ProcessesToUpdate::All, true);
+        } else {
+            self.system.refresh_processes_specifics(
+                ProcessesToUpdate::Some(&[self.pid]),
+                true,
+                ProcessRefreshKind::everything(),
+            );
+        }
+
         let process = self.system.process(self.pid)?;
+
+        let mut total_cpu = process.cpu_usage();
+        let mut total_memory = process.memory();
+        let mut total_virtual = process.virtual_memory();
         let disk = process.disk_usage();
-        
+        let mut total_disk_read = disk.read_bytes;
+        let mut total_disk_written = disk.written_bytes;
+        let mut total_threads = process.tasks().map(|tasks| tasks.len()).unwrap_or(1);
+
+        if self.include_children {
+            let mut descendants = Vec::new();
+            let mut stack = vec![self.pid];
+
+            // Build parent-to-children adjacency list
+            let mut tree: HashMap<Pid, Vec<Pid>> = HashMap::new();
+            for (pid, proc) in self.system.processes() {
+                if let Some(parent_pid) = proc.parent() {
+                    tree.entry(parent_pid).or_default().push(*pid);
+                }
+            }
+
+            // Find all descendants recursively
+            while let Some(current) = stack.pop() {
+                if let Some(children) = tree.get(&current) {
+                    for &child in children {
+                        descendants.push(child);
+                        stack.push(child);
+                    }
+                }
+            }
+
+            // Aggregate metrics from all descendants
+            for child_pid in descendants {
+                if let Some(child_proc) = self.system.process(child_pid) {
+                    total_cpu += child_proc.cpu_usage();
+                    total_memory += child_proc.memory();
+                    total_virtual += child_proc.virtual_memory();
+                    let c_disk = child_proc.disk_usage();
+                    total_disk_read += c_disk.read_bytes;
+                    total_disk_written += c_disk.written_bytes;
+                    total_threads += child_proc.tasks().map(|tasks| tasks.len()).unwrap_or(1);
+                }
+            }
+        }
+
+        let process_name = process.name().to_string_lossy().into_owned();
+        let display_name = if self.include_children {
+            format!("{} (tree)", process_name)
+        } else {
+            process_name
+        };
+
         Some(ProcessInfo {
             timestamp_ms: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .ok()?
                 .as_millis() as u64,
             pid: self.pid.as_u32(),
-            name: process.name().to_string_lossy().into_owned(),
+            name: display_name,
             executable_path: process
                 .exe()
                 .map(|path| path.to_string_lossy().into_owned()),
-            thread_count: process.tasks().map(|tasks| tasks.len()),
+            thread_count: Some(total_threads),
             uptime_seconds: process.run_time(),
-            cpu_percent: process.cpu_usage(),
-            memory_bytes: process.memory(),
+            cpu_percent: total_cpu,
+            memory_bytes: total_memory,
             system_memory_bytes: self.system.total_memory(),
-            virtual_memory_bytes: process.virtual_memory(),
-            disk_read_bytes: disk.read_bytes,
-            disk_written_bytes: disk.written_bytes,
+            virtual_memory_bytes: total_virtual,
+            disk_read_bytes: total_disk_read,
+            disk_written_bytes: total_disk_written,
             network_received_bytes: self
                 .networks
                 .values()

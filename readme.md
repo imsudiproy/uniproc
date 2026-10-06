@@ -9,7 +9,9 @@ Use UniProc when you want a lightweight, focused view of one process instead of 
 ## Features
 
 - Interactive Ratatui dashboard with CPU, resident memory, disk I/O, network, uptime, executable path, thread count, and history views
+- Modern Grafana-style layout with Tailwind-inspired colors
 - Safe target selection by PID or exact process name
+- Process Tree / Child Tracking: Monitor a process and all its descendants with the `--tree` flag
 - Ambiguous process-name protection, with a prompt to select a PID when multiple processes match
 - Pause, clear-history, and quit controls in the dashboard
 - Bounded in-memory history for long-running TUI sessions
@@ -17,6 +19,7 @@ Use UniProc when you want a lightweight, focused view of one process instead of 
 - Pretty JSON export for automation and downstream tooling
 - Byte-accurate raw fields in export files
 - Reliable terminal cleanup when leaving the alternate screen
+- Comprehensively documented codebase using rustdocs
 
 ## Status
 
@@ -76,6 +79,12 @@ Monitor a process by exact name:
 cargo run -- --name my-service
 ```
 
+Monitor a process and all its descendants (Tree Mode):
+
+```bash
+cargo run -- --name chrome --tree
+```
+
 Sample more frequently:
 
 ```bash
@@ -112,6 +121,7 @@ General options:
 
 | Option | Default | Description |
 | --- | --- | --- |
+| `-t, --tree` | false | Aggregate CPU, Memory, Disk, and Threads for the target and all its descendants. **Note:** Memory is calculated as the sum of Resident Set Size (RSS). This heavily overcounts shared libraries used by child processes. |
 | `--interval <MS>` | `1000` | Sampling interval in milliseconds. Must be at least `1`. |
 | `--duration <SECONDS>` | none | Stop collection after this many seconds. Required when using `--csv` or `--json`. |
 | `--csv <PATH>` | none | Write captured samples as CSV instead of starting the interactive dashboard. |

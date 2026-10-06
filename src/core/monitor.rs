@@ -73,12 +73,18 @@ impl Monitor {
     /// * `pid` - Target process ID.
     /// * `interval` - Rest period between samples.
     /// * `duration` - Maximum time to monitor before automatic shutdown.
-    pub fn new(pid: u32, interval: Duration, duration: Option<Duration>) -> Result<Self, String> {
+    /// * `include_children` - Whether to aggregate metrics from descendant processes.
+    pub fn new(
+        pid: u32,
+        interval: Duration,
+        duration: Option<Duration>,
+        include_children: bool,
+    ) -> Result<Self, String> {
         if interval.is_zero() {
             return Err("--interval must be at least 1 ms".to_owned());
         }
         Ok(Self {
-            sampler: ProcessSampler::new(pid)?,
+            sampler: ProcessSampler::new(pid, include_children)?,
             interval,
             started_at: Instant::now(),
             duration,
@@ -91,12 +97,12 @@ impl Monitor {
     pub fn sample(&mut self) -> Option<ProcessInfo> {
         self.sampler.sample()
     }
-    
+
     /// Gets the configured sleep interval duration.
     pub fn interval(&self) -> Duration {
         self.interval
     }
-    
+
     /// Evaluates if the time since instantiation has exceeded the specified duration limit.
     /// Always returns false if no duration limit was configured.
     pub fn is_expired(&self) -> bool {
